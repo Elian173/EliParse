@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Boomi Profile Utilities</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        h1 {
+            margin-bottom: 5px;
+        }
+        .input-area label,
+        .input-area input[type="file"],
+        .input-area textarea {
+            display: block;
+            margin-bottom: 5px;
+            width: 95%;
+        }
+        #xmlInputArea {
+            font-family: monospace;
+            min-height: 150px;
+        }
+        #previewArea {
+            white-space: pre-wrap;
+            font-family: monospace;
+            background-color: #f0f0f0;
+            padding: 10px;
+            border: 1px solid #ccc;
+            max-height: 300px;
+            overflow-y: auto;
+            width: 95%;
+        }
+        .button-container button,
+        #generatedOutputContainer button { /* Style all action buttons */
+            padding: 10px 20px;
+            color: white;
+            border: none;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        #generateXsd { background-color: #4CAF50; } /* Green */
+        #generateXsd:hover:not(:disabled) { background-color: #45a049; }
+        #generateTags { background-color: #008CBA; } /* Blue */
+        #generateTags:hover:not(:disabled) { background-color: #007ba7; }
+        #copyButton { background-color: #f44336; } /* Red */
+        #copyButton:hover:not(:disabled) { background-color: #da190b; }
+        #downloadButton { background-color: #ff9800; } /* Orange */
+        #downloadButton:hover:not(:disabled) { background-color: #e68a00; }
+
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        #generatedOutputContainer {
+            margin-top: 15px;
+            border: 1px solid #bbb;
+            padding: 10px;
+            background-color: #e9e9e9;
+            width: 95%;
+            display: none; /* Hide initially */
+        }
+        #generatedOutputContainer h3 {
+             margin-top: 0;
+             margin-bottom: 10px;
+        }
+         #generatedContent {
+            white-space: pre-wrap;
+            font-family: monospace;
+            background-color: #fff;
+            padding: 10px;
+            border: 1px solid #ccc;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+         }
+
+        .status-message {
+            margin-top: 5px;
+            font-style: italic;
+        }
+        .error { color: red; font-weight: bold; }
+
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin-bottom: 10px; /* Align with buttons */
+        }
+         /* Optional: Style disabled label */
+         input[type="checkbox"]:disabled + label {
+             opacity: 0.6;
+             cursor: not-allowed;
+         }
+
+    </style>
+</head>
+<body>
+    <h1>Boomi Profile Utilities</h1>
+
+    <div class="input-area">
+        <label for="fileInput">Upload Boomi Profile XML File:</label>
+        <input type="file" id="fileInput" accept=".xml"/>
+
+        <label for="xmlInputArea">Or Paste XML Content:</label>
+        <textarea id="xmlInputArea" placeholder="Paste Boomi Profile XML here..."></textarea>
+    </div>
+
+    <div>
+        <label for="previewArea">Input Preview / Status:</label>
+        <pre id="previewArea">Load or paste a Boomi EDI or XML Profile XML file...</pre>
+         <div id="statusMessage" class="status-message"></div>
+    </div>
+
+
+    <div class="button-container">
+        <div class="checkbox-container">
+           <input type="checkbox" id="includeValidation" name="includeValidation" disabled>
+           <label for="includeValidation">Include Validation Rules in XSD</label>
+        </div>
+        <button id="generateXsd" disabled>Generate XSD (EDI Only)</button>
+        <button id="generateTags" disabled>Generate/Update TagLists (XML Only)</button>
+        <button id="generateTagsAndRename" disabled>Generate Tags & Rename Elements (XML Only)</button>
+        </div>
+
+
+    <div id="generatedOutputContainer">
+        <h3>Generated Output:</h3>
+         <pre id="generatedContent"></pre>
+         <button id="copyButton">Copy to Clipboard</button>
+         <button id="downloadButton" style="display: none;">Download File</button>
+         <span id="copyStatus" style="margin-left: 10px; font-style: italic;"></span>
+    </div>
+
+    <script>
+        // Global state
+        window.boomiXmlDoc = null;
+        window.profileType = null; // 'EDI' or 'XML' or null
+
+        const fileInputElement = document.getElementById('fileInput');
+        const xmlInputAreaElement = document.getElementById('xmlInputArea');
+        const previewAreaElement = document.getElementById('previewArea');
+        const statusMessageElement = document.getElementById('statusMessage');
+        const generateXsdButton = document.getElementById('generateXsd');
+        const generateTagsButton = document.getElementById('generateTags');
+        const generatedOutputContainer = document.getElementById('generatedOutputContainer');
+        const generatedContentElement = document.getElementById('generatedContent');
+        const copyButton = document.getElementById('copyButton');
+        const copyStatusElement = document.getElementById('copyStatus');
+        // Get reference to the new download button
+        const downloadButton = document.getElementById('downloadButton');
+        const includeValidationCheckbox = document.getElementById('includeValidation');
+        const generateTagsAndRenameButton = document.getElementById('generateTagsAndRename');
+        // === END GET NEW BUTTON ===
+        // --- Input Handlers ---
+        fileInputElement.addEventListener('change', handleFileInputChange);
+        xmlInputAreaElement.addEventListener('input', handleTextInputChange);
+
+        function handleFileInputChange(event) { /* ... as before ... */
+            const file = event.target.files[0]; if (!file) return;
+            statusMessageElement.textContent = `Reading file: ${file.name}...`;
+            previewAreaElement.textContent = ''; previewAreaElement.classList.remove('error');
+            generatedOutputContainer.style.display = 'none';
+            const reader = new FileReader();
+            reader.onload = function (e) { const xmlString = e.target.result; xmlInputAreaElement.value = xmlString; processXmlString(xmlString); };
+            reader.onerror = function(e) { console.error("Error reading file:", e); statusMessageElement.textContent = ''; previewAreaElement.textContent = 'Error reading the selected file.'; previewAreaElement.classList.add('error'); resetState(); };
+            reader.readAsText(file);
+        }
+        function handleTextInputChange(event) { /* ... as before ... */
+             clearTimeout(window.inputTimeout); window.inputTimeout = setTimeout(() => {
+                statusMessageElement.textContent = `Processing pasted text...`; previewAreaElement.textContent = ''; previewAreaElement.classList.remove('error');
+                generatedOutputContainer.style.display = 'none'; fileInputElement.value = '';
+                const xmlString = event.target.value; processXmlString(xmlString); }, 500);
+        }
+
+        // --- Core XML Processing ---
+        function processXmlString(xmlString) { /* ... as before ... */
+            if (!xmlString || xmlString.trim() === '') { previewAreaElement.textContent = 'Load or paste a Boomi EDI or XML Profile XML file...'; statusMessageElement.textContent = ''; resetState(); return; }
+            const parser = new DOMParser(); const xmlDoc = parser.parseFromString(xmlString, "application/xml");
+            const parserError = xmlDoc.querySelector('parsererror');
+            if (parserError) { console.error("Error parsing XML:", parserError.textContent); previewAreaElement.textContent = `Error parsing XML:\n${parserError.textContent}`; previewAreaElement.classList.add('error'); statusMessageElement.textContent = 'XML Parsing Error.'; resetState(); return; }
+            const ediProfileElement = xmlDoc.querySelector('EdiProfile'); const xmlProfileElement = xmlDoc.querySelector('XMLProfile');
+            let profileName = xmlDoc.documentElement.getAttribute('name') || '[Unknown Profile Name]';
+            if (ediProfileElement) { setProfileState('EDI', xmlDoc, profileName); try { previewAreaElement.textContent = parseBoomiEdiXmlForPreview(xmlDoc); } catch (err) { handlePreviewError(err, 'EDI'); } }
+            else if (xmlProfileElement) { setProfileState('XML', xmlDoc, profileName); try { previewAreaElement.textContent = parseBoomiXmlProfileForPreview(xmlDoc); } catch (err) { handlePreviewError(err, 'XML'); } }
+            else { const rootElementName = xmlDoc.documentElement ? xmlDoc.documentElement.tagName : 'N/A'; previewAreaElement.textContent = `Error: Could not find <EdiProfile> or <XMLProfile> element...`; previewAreaElement.classList.add('error'); statusMessageElement.textContent = 'Unrecognized Profile Type.'; resetState(); }
+        }
+        function setProfileState(type, xmlDoc, name) {
+            window.profileType = type;
+            // Store a clone initially, so rename doesn't affect original view until action
+            // Note: This simple clone might miss some nuances, but okay for this purpose
+             window.boomiXmlDoc = xmlDoc.cloneNode(true);
+
+            generateXsdButton.disabled = (type !== 'EDI');
+            includeValidationCheckbox.disabled = (type !== 'EDI');
+            if (type !== 'EDI') {
+                includeValidationCheckbox.checked = false;
+            }
+            generateTagsButton.disabled = (type !== 'XML');
+            // Enable/disable the new button
+            generateTagsAndRenameButton.disabled = (type !== 'XML');
+
+            statusMessageElement.textContent = `${type} Profile Loaded: ${name}`;
+            previewAreaElement.classList.remove('error');
+            generatedOutputContainer.style.display = 'none';
+            copyStatusElement.textContent = '';
+        }
+       // === UPDATE resetState ===
+       function resetState() {
+            window.profileType = null;
+            window.boomiXmlDoc = null;
+            generateXsdButton.disabled = true;
+            generateTagsButton.disabled = true;
+            // Disable the new button
+            generateTagsAndRenameButton.disabled = true;
+            includeValidationCheckbox.disabled = true;
+            includeValidationCheckbox.checked = false;
+            generatedOutputContainer.style.display = 'none';
+        }
+        // === END UPDATE ===
+        
+        function handlePreviewError(error, type) { /* ... as before ... */
+             console.error(`Error generating ${type} preview:`, error); previewAreaElement.textContent = `Preview generation error for ${type} profile: ${error.message}`; previewAreaElement.classList.add('error'); statusMessageElement.textContent = 'Error generating preview.';
+        }
+
+        // --- Action Button Handlers ---
+// --- Action Button Handlers ---
+        generateXsdButton.addEventListener('click', function () {
+            if (!window.boomiXmlDoc || window.profileType !== 'EDI') { alert('Please load an EDI Profile first.'); return; }
+            try {
+                statusMessageElement.textContent = 'Generating XSD...';
+                // --- MODIFICATION START ---
+                // Get checkbox state
+                const includeValidation = includeValidationCheckbox.checked;
+                // Pass state to generator function
+                const xsdString = generateXsd(window.boomiXmlDoc, includeValidation);
+                // --- MODIFICATION END ---
+                displayGeneratedOutput(xsdString, 'Generated XSD', 'XSD', 'generated.xsd');
+                statusMessageElement.textContent = 'XSD Generation Complete.';
+            } catch (error) { handleActionError(error, 'XSD generation'); }
+        });
+
+        generateTagsButton.addEventListener('click', function () {
+            if (!window.boomiXmlDoc || window.profileType !== 'XML') { alert('Please load an XML Profile first.'); return; }
+            try {
+                statusMessageElement.textContent = 'Generating/Updating TagLists...';
+                const modifiedXmlString = generateTagListsForXmlProfile(window.boomiXmlDoc);
+                if (modifiedXmlString) {
+                    // Pass output type and filename
+                    displayGeneratedOutput(modifiedXmlString, 'Profile XML with TagLists', 'ProfileXML', 'profile_with_tags.xml');
+                    statusMessageElement.textContent = 'TagList Generation/Update Complete.';
+                } else { throw new Error("TagList generation returned empty result."); }
+            } catch (error) { handleActionError(error, 'TagList generation'); }
+        });
+
+        // Modified function to handle output display and download button visibility
+        function displayGeneratedOutput(content, title, outputType, suggestedFilename) {
+             generatedContentElement.textContent = content;
+             generatedOutputContainer.querySelector('h3').textContent = title + ':';
+             generatedOutputContainer.style.display = 'block';
+             copyStatusElement.textContent = '';
+             copyButton.textContent = 'Copy to Clipboard';
+             copyButton.disabled = false;
+
+             // Handle Download Button
+             if (outputType === 'XSD') {
+                 downloadButton.style.display = 'inline-block'; // Show button
+                 downloadButton.dataset.filename = suggestedFilename; // Store filename
+             } else {
+                 downloadButton.style.display = 'none'; // Hide button
+                 delete downloadButton.dataset.filename; // Remove filename data
+             }
+
+             generatedOutputContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function handleActionError(error, actionName) { /* ... as before ... */
+             console.error(`Error during ${actionName}:`, error); previewAreaElement.textContent += `\n\nError during ${actionName}: ${error.message}`; previewAreaElement.classList.add('error'); statusMessageElement.textContent = `Error during ${actionName}.`; generatedOutputContainer.style.display = 'none';
+        }
+
+
+        // --- Copy Button Handler ---
+        copyButton.addEventListener('click', function() { /* ... as before ... */
+            const textToCopy = generatedContentElement.textContent; if (!textToCopy) return;
+            navigator.clipboard.writeText(textToCopy).then(() => { copyStatusElement.textContent = 'Copied!'; copyButton.textContent = 'Copied!'; copyButton.disabled = true; setTimeout(() => { copyStatusElement.textContent = ''; copyButton.textContent = 'Copy to Clipboard'; copyButton.disabled = false; }, 2000);
+            }).catch(err => { console.error('Failed to copy text: ', err); copyStatusElement.textContent = 'Copy failed!'; alert('Failed to copy text.'); });
+        });
+
+        // --- NEW Download Button Handler ---
+        downloadButton.addEventListener('click', function(event) {
+             const filename = event.target.dataset.filename;
+             const content = generatedContentElement.textContent;
+             if(filename && content) {
+                saveFile(filename, content);
+             } else {
+                 console.error("Missing filename or content for download.");
+                 alert("Could not initiate download. Content or filename missing.");
+             }
+        });
+
+
+               // === NEW BUTTON Event Listener ===
+               generateTagsAndRenameButton.addEventListener('click', function () {
+            if (!window.boomiXmlDoc || window.profileType !== 'XML') { alert('Please load an XML Profile first.'); return; }
+            try {
+                statusMessageElement.textContent = 'Renaming Elements & Generating Tags...';
+                 // Operate on a clone to avoid modifying the original doc object in memory
+                 const docClone = window.boomiXmlDoc.cloneNode(true);
+                const modifiedXmlString = generateTagListsAndRenameElements(docClone); // Call the new function
+                if (modifiedXmlString) {
+                    displayGeneratedOutput(modifiedXmlString, 'Renamed Profile XML with TagLists', 'ProfileXML', 'profile_renamed_with_tags.xml');
+                    statusMessageElement.textContent = 'Element Renaming & TagList Generation Complete.';
+                } else { throw new Error("Renaming/TagList generation returned empty result."); }
+            } catch (error) { handleActionError(error, 'Element Renaming & TagList generation'); }
+        });
+        // === END NEW BUTTON Event Listener ===
+
+
+    // --- Helper Functions ---
+    function toSnakeCase(str) {
+            if (!str) return '';
+            return str.trim().replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_').replace(/__+/g, '_').toLowerCase();
+        }
+
+    function cleanName(name) {
+        if (!name) return 'UnnamedElement';
+        let cleaned = name.replace(/[^a-zA-Z0-9_\-]/g, '_');
+        if (/^[\d\-]/.test(cleaned)) cleaned = `_${cleaned}`;
+        if (cleaned.toLowerCase().startsWith('xml')) cleaned = `_${cleaned}`;
+        if (!cleaned) return 'EmptyElementName';
+        return cleaned;
+    }
+    
+
+     function saveFile(filename, content) {
+       const blob = new Blob([content], { type: 'application/xml;charset=utf-8' });
+       const link = document.createElement('a');
+       link.href = URL.createObjectURL(blob);
+       link.download = filename;
+       document.body.appendChild(link);
+       link.click();
+       document.body.removeChild(link);
+       setTimeout(() => URL.revokeObjectURL(link.href), 100);
+     }
+    // --- END Helper Functions ---
+
+
+    // --- Preview Generation Functions ---
+    function parseBoomiEdiXmlForPreview(xmlDoc) {
+        const lines = [];
+        function walkLoop(loopNode, depth = 0) {
+             const indent = '  '.repeat(depth);
+             const loopName = cleanName(loopNode.getAttribute('name') || 'Loop');
+             const loopRepeat = loopNode.getAttribute('loopRepeat') || '1';
+             const loopingOption = loopNode.getAttribute('loopingOption') || 'unique';
+             lines.push(`${indent}<${loopName} repeat="${loopRepeat}" option="${loopingOption}">`);
+             const children = Array.from(loopNode.children);
+             let previousSegmentName = ''; let segmentCount = 0;
+             children.forEach(child => {
+                 if (child.tagName === 'EdiSegment') {
+                     const seg = child;
+                     const rawSegName = seg.getAttribute('name') || 'Segment';
+                     let segName = cleanName(rawSegName);
+                      const maxUse = seg.getAttribute('maxUse') || '1';
+                      const mandatory = seg.getAttribute('mandatory') === 'true';
+                      if (segName === previousSegmentName) { segmentCount++; segName = `${segName}_${segmentCount}`; } else { segmentCount = 0; }
+                      previousSegmentName = segName;
+                      lines.push(`${indent}  <${segName} maxUse="${maxUse}" mandatory="${mandatory}">`);
+                      seg.querySelectorAll(':scope > EdiDataElement').forEach(el => {
+                          const elName = el.getAttribute('name') || 'Element'; const elType = el.getAttribute('dataType') || 'string';
+                          const finalName = cleanName(elName);
+                          lines.push(`${indent}    <${finalName} type="${elType}" />`); });
+                      lines.push(`${indent}  </${segName}>`);
+                 } else if (child.tagName === 'EdiLoop') {
+                     walkLoop(child, depth + 1); previousSegmentName = ''; segmentCount = 0; } });
+             lines.push(`${indent}</${loopName}>`);
+        }
+        const dataElementsNode = xmlDoc.querySelector('EdiProfile > DataElements');
+        if (dataElementsNode) { dataElementsNode.querySelectorAll(':scope > EdiLoop').forEach(loop => walkLoop(loop)); }
+        else { lines.push("Preview Error: Could not find <DataElements>."); }
+        return lines.join('\n');
+    }
+
+    function parseBoomiXmlProfileForPreview(xmlDoc) {
+        const lines = [];
+        function walkElement(elementNode, depth = 0) {
+             const indent = '  '.repeat(depth);
+             const elName = cleanName(elementNode.getAttribute('name') || 'Element');
+             const maxOccurs = elementNode.getAttribute('maxOccurs') || '1';
+             const minOccurs = elementNode.getAttribute('minOccurs') || '1';
+             const looping = elementNode.getAttribute('loopingOption') === 'unique' ? ' (Looping)' : '';
+             const qualifiers = elementNode.querySelectorAll(':scope > QualifierList > Qualifier');
+             let qualifierText = '';
+             if (qualifiers.length > 0) { qualifierText = ' Qualifiers: [' + Array.from(qualifiers).map(q => q.getAttribute('qualifierValue')).join(', ') + ']'; }
+             lines.push(`${indent}<${elName}${looping} minOccurs="${minOccurs}" maxOccurs="${maxOccurs}"${qualifierText}>`);
+             elementNode.querySelectorAll(':scope > XMLElement').forEach(child => walkElement(child, depth + 1));
+        }
+        const dataElementsNode = xmlDoc.querySelector('XMLProfile > DataElements');
+        if (dataElementsNode) { dataElementsNode.querySelectorAll(':scope > XMLElement').forEach(rootEl => walkElement(rootEl)); }
+        else { lines.push("Preview Error: Could not find <DataElements>."); }
+        return lines.join('\n');
+    }
+    // --- END Preview Generation Functions ---
+
+
+    // --- Function to parse EDI Tag Lists (needed by generateXsd) ---
+    function parseTagLists(xmlDoc) {
+        // ** THIS IS THE FUNCTION THAT WAS MISSING/UNDEFINED **
+        const tagMap = new Map();
+        // Query relative to the root document to find the correct EdiProfile tag lists
+        const tagListsNodes = xmlDoc.querySelectorAll('EdiProfile > tagLists > TagList'); // Specific to EDI
+
+        tagListsNodes.forEach(tagList => {
+            const elementKey = tagList.getAttribute('elementKey');
+            const listKey = tagList.getAttribute('listKey');
+            if (!elementKey) return;
+
+            const expressions = tagList.querySelectorAll('GroupingExpression > TagExpression');
+            let docString = `TagList (listKey: ${listKey || 'N/A'}): Identifies instances where `;
+            const conditions = [];
+
+            expressions.forEach(expr => {
+                const idName = expr.getAttribute('identifierName');
+                const idType = expr.getAttribute('identifierType');
+                const idValueNode = expr.querySelector('identifierValue'); // Direct child
+                const idValue = idValueNode ? idValueNode.textContent : null;
+                if (idName && idType === 'value' && idValue !== null) {
+                    conditions.push(`${idName} = "${idValue}"`);
+                }
+            });
+
+            if (conditions.length > 0) {
+                docString += conditions.join(' AND '); // Assume 'and'
+                if (!tagMap.has(elementKey)) {
+                    tagMap.set(elementKey, []);
+                }
+                tagMap.get(elementKey).push(docString);
+            }
+        });
+        return tagMap;
+    }
+    // --- END parseTagLists ---
+
+
+
+    function generateXsd(xmlDoc, includeValidation) {
+    if (window.profileType !== 'EDI') {
+        return "";
+    }
+
+    let xsdParts = [];
+    xsdParts.push(`<?xml version="1.0" encoding="UTF-8"?>\n<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">\n`);
+    const profileName = xmlDoc.documentElement.getAttribute('name');
+    const rootElementName = profileName ? cleanName(profileName) : 'EdiDocument';
+    xsdParts.push(`${'  '.repeat(1)}<xs:element name="${rootElementName}">\n`);
+    xsdParts.push(`${'  '.repeat(2)}<xs:complexType>\n`);
+    xsdParts.push(`${'  '.repeat(3)}<xs:sequence>\n`);
+
+    const tagDocumentation = parseTagLists(xmlDoc);
+
+    function mapType(ediType) {
+         switch (ediType ? ediType.toUpperCase() : '') {
+            case 'ID': case 'AN': return 'xs:string'; case 'R': return 'xs:string';
+            case 'N0': case 'N1': case 'N2': case 'N3': case 'N4': case 'N5':
+            case 'N6': case 'N7': case 'N8': case 'N9': return 'xs:string';
+            case 'DT': return 'xs:string'; case 'TM': return 'xs:string'; default: return 'xs:string';
+         }
+    }
+
+    function walkLoop(loopNode, depth = 3) {
+        const loopKey = loopNode.getAttribute('key');
+        const rawLoopName = loopNode.getAttribute('name') || 'Loop';
+        const loopName = cleanName(rawLoopName);
+
+        const loopRepeat = loopNode.getAttribute('loopRepeat') || '1';
+        const mandatory = loopNode.getAttribute('mandatory') === 'true';
+        const minOccurs = mandatory ? '1' : '0';
+        const maxOccurs = loopRepeat === '-1' ? 'unbounded' : loopRepeat;
+
+        xsdParts.push(`${'  '.repeat(depth)}<xs:element name="${loopName}" minOccurs="${minOccurs}" maxOccurs="${maxOccurs}">\n`);
+
+        if (loopKey && tagDocumentation.has(loopKey)) {
+            xsdParts.push(`${'  '.repeat(depth + 1)}<xs:annotation>\n`);
+            tagDocumentation.get(loopKey).forEach(doc => {
+                const escapedDoc = doc.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                xsdParts.push(`${'  '.repeat(depth + 2)}<xs:documentation>${escapedDoc}</xs:documentation>\n`); });
+            xsdParts.push(`${'  '.repeat(depth + 1)}</xs:annotation>\n`);
+        }
+
+        xsdParts.push(`${'  '.repeat(depth + 1)}<xs:complexType>\n`);
+        xsdParts.push(`${'  '.repeat(depth + 2)}<xs:sequence>\n`);
+
+        const children = Array.from(loopNode.children);
+        let segmentNameCounts = {};
+
+        children.forEach(child => {
+            if (child.tagName === 'EdiSegment') {
+                const seg = child;
+                const rawSegName = seg.getAttribute('name') || 'Segment';
+                const segPurpose = seg.getAttribute('segmentName');
+
+                let baseSegName = cleanName(rawSegName);
+                let finalSegName = baseSegName;
+                if (segmentNameCounts[baseSegName] !== undefined) {
+                     segmentNameCounts[baseSegName]++;
+                     finalSegName = `${baseSegName}_${segmentNameCounts[baseSegName]}`;
+                } else {
+                     segmentNameCounts[baseSegName] = 0;
+                }
+                const segMax = seg.getAttribute('maxUse') || '1';
+                const segMandatory = seg.getAttribute('mandatory') === 'true';
+                const segMinOccurs = segMandatory ? '1' : '0';
+                const segMaxOccurs = segMax === '-1' ? 'unbounded' : segMax;
+
+                let segAnnotationString = '';
+                 if (segPurpose) {
+                     const escapedPurpose = segPurpose.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                     segAnnotationString = `${'  '.repeat(depth + 4)}<xs:annotation>\n${'  '.repeat(depth + 5)}<xs:documentation>Segment: ${escapedPurpose}</xs:documentation>\n${'  '.repeat(depth + 4)}</xs:annotation>\n`;
+                 }
+
+                xsdParts.push(`${'  '.repeat(depth + 3)}<xs:element name="${finalSegName}" minOccurs="${segMinOccurs}" maxOccurs="${segMaxOccurs}">\n`);
+                 xsdParts.push(segAnnotationString);
+                xsdParts.push(`${'  '.repeat(depth + 4)}<xs:complexType>\n`);
+                xsdParts.push(`${'  '.repeat(depth + 5)}<xs:sequence>\n`);
+
+                seg.querySelectorAll(':scope > EdiDataElement').forEach(el => {
+                    const elName = el.getAttribute('name') || 'Element';
+                    const elPurpose = el.getAttribute('elementPurpose');
+
+                    const elType = el.getAttribute('dataType') || 'string';
+                    const elMandatory = el.getAttribute('mandatory') === 'true';
+                    const elMinOccurs = elMandatory ? '1' : '0';
+                    const elMaxOccurs = '1';
+                    const finalName = cleanName(elName);
+                    const xsdType = mapType(elType);
+
+                    let annotationString = '';
+                    if (elPurpose) {
+                         const escapedPurpose = elPurpose.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                         annotationString = `${'  '.repeat(depth + 6)}<xs:annotation>\n${'  '.repeat(depth + 7)}<xs:documentation>${escapedPurpose}</xs:documentation>\n${'  '.repeat(depth + 6)}</xs:annotation>\n`;
+                     }
+
+                    const minLength = el.getAttribute('minLength');
+                    const maxLength = el.getAttribute('maxLength');
+                    const qualifierNodes = el.querySelectorAll(':scope > QualifierList > Qualifier');
+                    let enumerations = '';
+
+                     if (includeValidation && qualifierNodes.length > 0) {
+                         qualifierNodes.forEach(qNode => {
+                             const qVal = qNode.getAttribute('qualifierValue');
+                             if (qVal) {
+                                 const escapedQVal = qVal.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                                 enumerations += `${'  '.repeat(depth + 9)}<xs:enumeration value="${escapedQVal}"/>\n`; } });
+                     } else if (includeValidation) {
+                         const codeListAttr = el.querySelector(':scope > QualifierList')?.getAttribute('codeList');
+                         if (codeListAttr) {
+                             enumerations += `${'  '.repeat(depth + 9)}\n`; }
+                     }
+
+                    const hasRestrictions = minLength || maxLength || (enumerations.trim() !== '');
+
+                    if (includeValidation && hasRestrictions) {
+                         xsdParts.push(`${'  '.repeat(depth + 6)}<xs:element name="${finalName}" minOccurs="${elMinOccurs}" maxOccurs="${elMaxOccurs}">\n`);
+                         xsdParts.push(annotationString);
+                         xsdParts.push(`${'  '.repeat(depth + 7)}<xs:simpleType>\n`);
+                         xsdParts.push(`${'  '.repeat(depth + 8)}<xs:restriction base="${xsdType}">\n`);
+                         if (minLength) { xsdParts.push(`${'  '.repeat(depth + 9)}<xs:minLength value="${minLength}"/>\n`); }
+                         if (maxLength) { xsdParts.push(`${'  '.repeat(depth + 9)}<xs:maxLength value="${maxLength}"/>\n`); }
+                         xsdParts.push(enumerations);
+                         xsdParts.push(`${'  '.repeat(depth + 8)}</xs:restriction>\n`);
+                         xsdParts.push(`${'  '.repeat(depth + 7)}</xs:simpleType>\n`);
+                         xsdParts.push(`${'  '.repeat(depth + 6)}</xs:element>\n`);
+                     } else {
+                         xsdParts.push(`${'  '.repeat(depth + 6)}<xs:element name="${finalName}" type="${xsdType}" minOccurs="${elMinOccurs}" maxOccurs="${elMaxOccurs}">\n`);
+                         xsdParts.push(annotationString);
+                         xsdParts.push(`${'  '.repeat(depth + 6)}</xs:element>\n`);
+                     }
+                 });
+
+                xsdParts.push(`${'  '.repeat(depth + 5)}</xs:sequence>\n`);
+                xsdParts.push(`${'  '.repeat(depth + 4)}</xs:complexType>\n`);
+                xsdParts.push(`${'  '.repeat(depth + 3)}</xs:element>\n`);
+
+            } else if (child.tagName === 'EdiLoop') {
+                walkLoop(child, depth + 3);
+                segmentNameCounts = {};
+            }
+        });
+
+        xsdParts.push(`${'  '.repeat(depth + 2)}</xs:sequence>\n`);
+        xsdParts.push(`${'  '.repeat(depth + 1)}</xs:complexType>\n`);
+        xsdParts.push(`${'  '.repeat(depth)}</xs:element>\n`);
+    }
+
+    const dataElementsNode = xmlDoc.querySelector('EdiProfile > DataElements');
+    if (dataElementsNode) {
+         dataElementsNode.querySelectorAll(':scope > EdiLoop').forEach(loop => walkLoop(loop, 3));
+    } else {
+         xsdParts.push(`\n`);
+    }
+
+    xsdParts.push(`${'  '.repeat(3)}</xs:sequence>\n`);
+    xsdParts.push(`${'  '.repeat(2)}</xs:complexType>\n`);
+    xsdParts.push(`${'  '.repeat(1)}</xs:element>\n`);
+    xsdParts.push(`</xs:schema>\n`);
+
+    return xsdParts.join('');
+}
+
+
+        // === NEW FUNCTION ===
+        function generateTagListsAndRenameElements(xmlDoc) {
+            console.log("Renaming elements based on comments...");
+            const xmlProfileNode = xmlDoc.querySelector('XMLProfile');
+            if (!xmlProfileNode) throw new Error("Cannot find XMLProfile element.");
+            const dataElementsNode = xmlProfileNode.querySelector(':scope > DataElements');
+            if (!dataElementsNode) {
+                 console.warn("No DataElements found in XML Profile. Skipping rename.");
+                 // Proceed to generate tag lists even if no elements to rename
+            } else {
+                // Select all XMLElement nodes recursively within DataElements
+                const allXmlElements = dataElementsNode.querySelectorAll('XMLElement');
+                console.log(`Found ${allXmlElements.length} XMLElements to check for renaming.`);
+
+                allXmlElements.forEach(elementNode => {
+                    const currentName = elementNode.getAttribute('name');
+                    const comments = elementNode.getAttribute('comments'); // Assuming comment is in 'comments'
+
+                    if (currentName && comments && comments.trim() !== '') {
+                        const snakeCaseComment = toSnakeCase(comments);
+                        if (snakeCaseComment) {
+                            const newName = `${currentName}_${snakeCaseComment}`;
+                            // Optionally clean the combined name further if needed
+                            // const finalNewName = cleanName(newName);
+                            console.log(`Renaming "${currentName}" to "${newName}"`);
+                            elementNode.setAttribute('name', newName);
+                        }
+                    }
+                });
+                console.log("Element renaming complete.");
+            }
+
+            // Now, execute the original tag list generation logic on the MODIFIED xmlDoc
+            console.log("Proceeding with TagList generation on renamed profile...");
+            return generateTagListsForXmlProfile(xmlDoc); // Reuse the existing function
+        }
+        // === END NEW FUNCTION ===
+
+
+        // --- Function to generate TagLists for XML Profiles ---
+    function generateTagListsForXmlProfile(xmlDoc) {
+        // ... (Keep the generateTagListsForXmlProfile function previously provided) ...
+        console.log("Analyzing XML profile for qualifiers...");
+        const xmlProfileNode = xmlDoc.querySelector('XMLProfile');
+        if (!xmlProfileNode) throw new Error("Cannot find XMLProfile element.");
+        const dataElementsNode = xmlProfileNode.querySelector(':scope > DataElements');
+        if (!dataElementsNode) { console.warn("No DataElements found in XML Profile."); return new XMLSerializer().serializeToString(xmlDoc); }
+        function findLoopingAncestorJs(elementNode) {
+            let currentNode = elementNode.parentNode;
+            while (currentNode && currentNode !== xmlDoc && currentNode !== xmlProfileNode) {
+                 if (currentNode.nodeType === Node.ELEMENT_NODE && currentNode.tagName === 'XMLElement' && currentNode.getAttribute('loopingOption') === 'unique') { return currentNode; }
+                 currentNode = currentNode.parentNode; }
+            return null;
+        }
+        const tagsToGenerate = new Map();
+        const allElements = dataElementsNode.querySelectorAll('XMLElement');
+        console.log(`Found ${allElements.length} XMLElement(s) to scan.`);
+        allElements.forEach(elementNode => {
+            const qualifierList = elementNode.querySelector(':scope > QualifierList');
+            if (qualifierList) {
+                const explicitQualifiers = qualifierList.querySelectorAll(':scope > Qualifier[qualifierValue]');
+                if (explicitQualifiers.length > 0) {
+                     const qualValues = Array.from(explicitQualifiers).map(q => q.getAttribute('qualifierValue')).filter(val => val);
+                     if (qualValues.length > 0) {
+                         const qualifyingElementKey = elementNode.getAttribute('key'); const qualifyingElementName = elementNode.getAttribute('name');
+                         if (!qualifyingElementKey || !qualifyingElementName) { console.warn("Skipping element with qualifiers but missing key/name:", elementNode); return; }
+                         const containerNode = findLoopingAncestorJs(elementNode);
+                         if (containerNode) {
+                             const containerKey = containerNode.getAttribute('key');
+                             if (containerKey) {
+                                 console.log(`Found qualifiers [${qualValues.join(',')}] on element key=${qualifyingElementKey} (${qualifyingElementName}) belonging to container key=${containerKey}`);
+                                 if (!tagsToGenerate.has(containerKey)) { tagsToGenerate.set(containerKey, []); }
+                                 const containerTags = tagsToGenerate.get(containerKey);
+                                 const uniqueSortedQuals = [...new Set(qualValues)].sort();
+                                 uniqueSortedQuals.forEach(qVal => { const exists = containerTags.some(t => t.ident_key === qualifyingElementKey && t.qual_value === qVal); if (!exists) { containerTags.push({ ident_key: qualifyingElementKey, ident_name: qualifyingElementName, qual_value: qVal }); } });
+                             } else { console.warn(`Container node found for element key=${qualifyingElementKey} but container has no key.`); }
+                         } else { console.warn(`Could not find looping ancestor container for element key=${qualifyingElementKey}.`); } } } } });
+        let existingTagLists = xmlProfileNode.querySelector(':scope > tagLists');
+        if (existingTagLists) { console.log("Removing existing <tagLists> element."); xmlProfileNode.removeChild(existingTagLists); }
+        const newTagLists = xmlDoc.createElement('tagLists');
+        if (tagsToGenerate.size === 0) { console.log("No tag information found to generate. Adding empty <tagLists>."); }
+        else {
+            console.log(`Generating ${Array.from(tagsToGenerate.values()).flat().length} TagList entries.`);
+            let listKeyCounter = 1; const sortedContainerKeys = [...tagsToGenerate.keys()].sort((a, b) => parseInt(a) - parseInt(b));
+            sortedContainerKeys.forEach(containerKey => {
+                 const tags = tagsToGenerate.get(containerKey);
+                 tags.sort((a, b) => { const keyCompare = parseInt(a.ident_key) - parseInt(b.ident_key); if (keyCompare !== 0) return keyCompare; return a.qual_value.localeCompare(b.qual_value); });
+                 tags.forEach(tagInfo => {
+                     const tagList = xmlDoc.createElement('TagList'); tagList.setAttribute('elementKey', containerKey); tagList.setAttribute('listKey', listKeyCounter.toString()); listKeyCounter++;
+                     const groupingExpr = xmlDoc.createElement('GroupingExpression'); groupingExpr.setAttribute('operator', 'and');
+                     const tagExpr = xmlDoc.createElement('TagExpression'); tagExpr.setAttribute('identifierKey', tagInfo.ident_key); tagExpr.setAttribute('identifierName', tagInfo.ident_name); tagExpr.setAttribute('identifierType', 'value');
+                     const idValue = xmlDoc.createElement('identifierValue'); idValue.textContent = tagInfo.qual_value;
+                     tagExpr.appendChild(idValue); groupingExpr.appendChild(tagExpr); tagList.appendChild(groupingExpr); newTagLists.appendChild(tagList); }); });
+        }
+        const namespacesNode = xmlProfileNode.querySelector(':scope > Namespaces');
+        if (namespacesNode && namespacesNode.nextSibling) { xmlProfileNode.insertBefore(newTagLists, namespacesNode.nextSibling); }
+        else if (namespacesNode) { xmlProfileNode.appendChild(newTagLists); }
+        else { const dataElementsForInsert = xmlProfileNode.querySelector(':scope > DataElements'); if (dataElementsForInsert && dataElementsForInsert.nextSibling){ xmlProfileNode.insertBefore(newTagLists, dataElementsForInsert.nextSibling); } else if (dataElementsForInsert) { xmlProfileNode.appendChild(newTagLists); } else { xmlProfileNode.appendChild(newTagLists); } }
+        const serializer = new XMLSerializer(); const modifiedXmlString = serializer.serializeToString(xmlDoc);
+        return modifiedXmlString;
+    }
+    // --- END NEW Function ---
+
+  </script>
+</body>
+</html>
