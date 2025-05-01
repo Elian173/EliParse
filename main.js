@@ -87,7 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
           statusMessageElement.textContent = 'Generating XSD...';
           const includeValidation = includeValidationCheckbox.checked;
           const xsdString = generateXsd(window.boomiXmlDoc.cloneNode(true), includeValidation);
-          displayGeneratedOutput(xsdString, 'Generated XSD', 'XSD', 'generated.xsd');
+          displayGeneratedOutput(xsdString, 'Generated XSD', 'XSD', 'xsdFromEdiToImport.xsd');
           statusMessageElement.textContent = 'XSD Generation Complete.';
       } catch (error) { handleActionError(error, 'XSD generation'); }
   });
@@ -120,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function displayGeneratedOutput(content, title, outputType, suggestedFilename) {
        generatedContentElement.textContent = content;
-       generatedOutputContainer.querySelector('h3').textContent = title + ':';
+       generatedOutputContainer.querySelector('h2').textContent = title + ':';
        generatedOutputContainer.style.display = 'block';
        copyStatusElement.textContent = '';
        copyButton.textContent = 'Copy to Clipboard';
