@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>App Utilities</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+
+        <nav class="sidebar">
+            <h2>Apps</h2>
+            <ul class="nav-list">
+                <li><a href="#" class="nav-link active" data-target="app-boomi-profile">Boomi Profile Utils</a></li>
+                <li><a href="#" class="nav-link" data-target="app-placeholder">Placeholder App 2</a></li>
+                </ul>
+        </nav>
+
+        <main class="main-content">
+
+            <div id="app-boomi-profile" class="app-content active">
+                <h1>Boomi Profile Utilities</h1>
+                 <div>
+                    <h3>Load EDI Component to parse to XSD</h3>
+                    <h3>Load XML component to add Instance identifiers - add descriptive element names</h3>
+                    <textarea id="notes">
+                        Get and update (post) the components from:
+                        https://api.boomi.com/api/rest/v1/{ACC_ID}/Component/{COMP_ID}
+                        Content-Type - application/xml
+                        ____
+                        Workflow Steps:
+                        1. Load original EDI Component -> Click 'Generate XSD'. (Validation rules are now always included).
+                        2. (Optional) Click 'Remove Length Validation from XSD' if needed.
+                        3. Import generated/modified XSD into Boomi -> Create new XML Profile.
+                        4. Load the *new* Boomi-generated XML Profile Component XML here.
+                        5. (Optional) Click 'Rename Elements Only (Descriptive)' for better readability.
+                        6. Click 'Add Instance Identifiers' (or 'Add Instance Identifiers & Rename') to generate TagLists.
+                        7. Copy the final XML output and update your Boomi XML Profile Component via API.
+                        * Mappings might need manual adjustment in Boomi after updating profile.
+                    </textarea>
+                </div>
+
+                <div class="card input-card">
+                    <h2>Input Profile Component XML</h2>
+                    <div class="form-group file-input-group">
+                        <label for="fileInput" class="btn btn-secondary">
+                            Upload Boomi Profile XML
+                        </label>
+                        <input type="file" id="fileInput" accept=".xml"/>
+                        <span id="fileName" class="file-name-display">No file chosen</span>
+                    </div>
+                    <div class="form-group">
+                        <label for="xmlInputArea">Or Paste XML Content:</label>
+                        <textarea id="xmlInputArea" placeholder="Paste Boomi Profile XML here..."></textarea>
+                    </div>
+                </div>
+
+                <div class="card preview-card">
+                    <h2>Input Preview / Status</h2>
+                     <pre id="previewArea">Load or paste a Boomi EDI or XML Profile XML file...</pre>
+                     <div id="statusMessage" class="status-message"></div>
+                </div>
+
+                <div class="card actions-card">
+                    <h2>Actions</h2>
+                    <div class="button-group">
+                        <button id="generateXsd" class="btn btn-primary" disabled>Generate XSD (EDI Only)</button>
+                        <button id="removeLengthValidation" class="btn btn-secondary" disabled>Remove Length Validation from XSD</button>
+                        <button id="renameOnly" class="btn btn-secondary" disabled>Rename Elements Only (Descriptive) (XML Only)</button>
+                        <button id="generateTags" class="btn btn-primary" disabled>Add Instance Identifiers (XML Only)</button>
+                        <button id="generateTagsAndRename" class="btn btn-accent" disabled>Add Instance Identifiers & Rename (XML Only)</button>
+                    </div>
+                </div>
+
+                <div id="generatedOutputContainer" class="card output-card" style="display: none;">
+                     <h2>Generated Output</h2>
+                     <pre id="generatedContent"></pre>
+                     <div class="output-controls button-group">
+                         <button id="copyButton" class="btn btn-secondary">Copy to Clipboard</button>
+                         <button id="downloadButton" class="btn btn-secondary" style="display: none;">Download File</button>
+                         <span id="copyStatus" class="copy-status"></span>
+                     </div>
+                </div>
+            </div> <div id="app-placeholder" class="app-content">
+                <h1>Placeholder App 2</h1>
+                <p>This is where the content for the second app would go.</p>
+                <button id="placeholder-button" class="btn btn-primary">Log Hello</button>
+            </div> </main> </div> <script src="profileProcessors.js"></script> <script src="boomiUtils.js"></script>      <script src="main.js"></script>
+
+    </body>
+</html>
