@@ -21,12 +21,13 @@
             Content-Type - application/xml
             ____
             Workflow Steps:
-            1. Load original EDI Component -> Click 'Generate XSD'.
-            2. Import generated XSD into Boomi -> Create new XML Profile.
-            3. Load the *new* Boomi-generated XML Profile Component XML here.
-            4. (Optional) Click 'Rename Elements Only (Descriptive)' for better readability.
-            5. Click 'Add Instance Identifiers' (or 'Add Instance Identifiers - Rename') to generate TagLists.
-            6. Copy the final XML output and update your Boomi XML Profile Component via API.
+            1. Load original EDI Component -> Click 'Generate XSD'. (Validation rules are now always included).
+            2. (Optional) Click 'Remove Length Validation from XSD' if needed.
+            3. Import generated/modified XSD into Boomi -> Create new XML Profile.
+            4. Load the *new* Boomi-generated XML Profile Component XML here.
+            5. (Optional) Click 'Rename Elements Only (Descriptive)' for better readability.
+            6. Click 'Add Instance Identifiers' (or 'Add Instance Identifiers & Rename') to generate TagLists.
+            7. Copy the final XML output and update your Boomi XML Profile Component via API.
             * Mappings might need manual adjustment in Boomi after updating profile.
         </textarea>
     </div>
@@ -55,13 +56,10 @@
 
         <div class="card actions-card">
             <h2>Actions</h2>
-             <div class="checkbox-container">
-                <input type="checkbox" id="includeValidation" name="includeValidation" disabled>
-                <label for="includeValidation">Include Validation Rules in XSD (EDI Only)</label>
-             </div>
-            <div class="button-group">
+             <div class="button-group">
                 <button id="generateXsd" class="btn btn-primary" disabled>Generate XSD (EDI Only)</button>
-                <button id="renameOnly" class="btn btn-secondary" disabled>Rename Elements Only (Descriptive) (XML Only)</button> <button id="generateTags" class="btn btn-primary" disabled>Add Instance Identifiers (XML Only)</button>
+                <button id="removeLengthValidation" class="btn btn-secondary" disabled>Remove Length Validation from XSD</button> <button id="renameOnly" class="btn btn-secondary" disabled>Rename Elements Only (Descriptive) (XML Only)</button>
+                <button id="generateTags" class="btn btn-primary" disabled>Add Instance Identifiers (XML Only)</button>
                 <button id="generateTagsAndRename" class="btn btn-accent" disabled>Add Instance Identifiers & Rename (XML Only)</button>
             </div>
         </div>
