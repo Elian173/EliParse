@@ -20,13 +20,14 @@
             https://api.boomi.com/api/rest/v1/{ACC_ID}/Component/{COMP_ID}
             Content-Type - application/xml
             ____
-            Get the EDI component from the api, past it and get the XSD.
-            Import the XSD from Boomi and create a new XML.
-            Map with Boomi suggest, EDI to XML.
-            Get the XML profile generated using the component api and past it here.
-            Add identifiers and/or better names.
-            Send a post with the profile to the api referencing your XML component.
-            * Mappings should not get lost from initial suggest, you will have to do instances manually.
+            Workflow Steps:
+            1. Load original EDI Component -> Click 'Generate XSD'.
+            2. Import generated XSD into Boomi -> Create new XML Profile.
+            3. Load the *new* Boomi-generated XML Profile Component XML here.
+            4. (Optional) Click 'Rename Elements Only (Descriptive)' for better readability.
+            5. Click 'Add Instance Identifiers' (or 'Add Instance Identifiers - Rename') to generate TagLists.
+            6. Copy the final XML output and update your Boomi XML Profile Component via API.
+            * Mappings might need manual adjustment in Boomi after updating profile.
         </textarea>
     </div>
 
@@ -56,12 +57,12 @@
             <h2>Actions</h2>
              <div class="checkbox-container">
                 <input type="checkbox" id="includeValidation" name="includeValidation" disabled>
-                <label for="includeValidation">Include Validation Rules in XSD</label>
+                <label for="includeValidation">Include Validation Rules in XSD (EDI Only)</label>
              </div>
             <div class="button-group">
-                <button id="generateXsd" class="btn btn-primary" disabled>Generate XSD 1 to 1 for Boomi suggest (EDI Only)</button>
-                <button id="generateTags" class="btn btn-primary" disabled>Add Instance Identifiers - 1 to 1 (XML Only)</button>
-                <button id="generateTagsAndRename" class="btn btn-accent" disabled>Add Instance Identifiers - Rename elements to descriptive (XML Only)</button>
+                <button id="generateXsd" class="btn btn-primary" disabled>Generate XSD (EDI Only)</button>
+                <button id="renameOnly" class="btn btn-secondary" disabled>Rename Elements Only (Descriptive) (XML Only)</button> <button id="generateTags" class="btn btn-primary" disabled>Add Instance Identifiers (XML Only)</button>
+                <button id="generateTagsAndRename" class="btn btn-accent" disabled>Add Instance Identifiers & Rename (XML Only)</button>
             </div>
         </div>
 
