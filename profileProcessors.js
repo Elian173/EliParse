@@ -85,6 +85,7 @@ function parseTagLists(xmlDoc) {
 
 function generateXsd(xmlDoc, includeValidation) {
     // Generates an XSD schema string from a Boomi EDI Profile XML DOM.
+    // (TagList annotations are removed in this version)
     if (window.profileType !== 'EDI') {
         console.error("generateXsd called with non-EDI profile type.");
         return "";
@@ -98,9 +99,6 @@ function generateXsd(xmlDoc, includeValidation) {
     xsdParts.push(`${'  '.repeat(2)}<xs:complexType>\n`);
     xsdParts.push(`${'  '.repeat(3)}<xs:sequence>\n`);
 
-    // *** Removed the call to parseTagLists here as its result is no longer used ***
-    // const tagDocumentation = parseTagLists(xmlDoc);
-
     function walkLoop(loopNode, depth = 3) {
         const loopKey = loopNode.getAttribute('key');
         const rawLoopName = loopNode.getAttribute('name') || 'Loop';
@@ -113,18 +111,7 @@ function generateXsd(xmlDoc, includeValidation) {
 
         xsdParts.push(`${'  '.repeat(depth)}<xs:element name="${loopName}" minOccurs="${minOccurs}" maxOccurs="${maxOccurs}">\n`);
 
-        // *** REMOVED ANNOTATION BLOCK FOR TAGLISTS ***
-        /*
-        if (loopKey && tagDocumentation.has(loopKey)) {
-            xsdParts.push(`${'  '.repeat(depth + 1)}<xs:annotation>\n`);
-            tagDocumentation.get(loopKey).forEach(doc => {
-                const escapedDoc = doc.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                xsdParts.push(`${'  '.repeat(depth + 2)}<xs:documentation>${escapedDoc}</xs:documentation>\n`);
-            });
-            xsdParts.push(`${'  '.repeat(depth + 1)}</xs:annotation>\n`);
-        }
-        */
-        // *** END OF REMOVED BLOCK ***
+        // Removed TagList annotation block
 
         xsdParts.push(`${'  '.repeat(depth + 1)}<xs:complexType>\n`);
         xsdParts.push(`${'  '.repeat(depth + 2)}<xs:sequence>\n`);
@@ -252,17 +239,12 @@ function generateXsd(xmlDoc, includeValidation) {
     return xsdParts.join('');
 }
 
-// *** REVISED findLoopingAncestorJs FUNCTION ***
 function findLoopingAncestorJs(elementNode) {
     // Finds the intended looping ancestor for instance identification.
-    // Assumes the qualifier is on an element within a segment-like structure (e.g., N902 within N9),
-    // and the instance identifier should apply to the parent loop of that segment (e.g., _0400).
-
     const qualifyingElementKey = elementNode.getAttribute('key');
     const qualifyingElementName = elementNode.getAttribute('name');
     console.log(`Finding looping ancestor for qualifying element: key=${qualifyingElementKey} name=${qualifyingElementName}`);
 
-    // 1. Get the direct parent (likely the segment element, e.g., N9)
     const segmentElement = elementNode.parentElement;
     if (!segmentElement || segmentElement.tagName !== 'XMLElement') {
         console.warn(`Could not find parent XMLElement for key=${qualifyingElementKey}.`);
@@ -272,10 +254,8 @@ function findLoopingAncestorJs(elementNode) {
     const segmentName = segmentElement.getAttribute('name');
     console.log(`  Direct parent (segment): key=${segmentKey} name=${segmentName}`);
 
-    // 2. Get the parent of the segment (the potential loop element, e.g., _0400)
     const potentialLoopElement = segmentElement.parentElement;
     if (!potentialLoopElement || potentialLoopElement.tagName !== 'XMLElement') {
-        // If the parent isn't an XMLElement, maybe the 'segment' itself was the loop? Check that.
          const segmentLoopingOption = segmentElement.getAttribute('loopingOption');
          if (segmentLoopingOption === 'unique') {
              console.log(`    Confirmed looping ancestor IS the segment element: key=${segmentKey} name=${segmentName}`);
@@ -289,18 +269,15 @@ function findLoopingAncestorJs(elementNode) {
     const loopingOption = potentialLoopElement.getAttribute('loopingOption');
     console.log(`  Parent of segment (potential loop): key=${loopKey} name=${loopName} loopingOption=${loopingOption}`);
 
-    // 3. Check if this potential loop element is indeed the target looping container
     if (loopingOption === 'unique') {
         console.log(`    Confirmed looping ancestor: key=${loopKey} name=${loopName}`);
         return potentialLoopElement;
     } else {
-        // If the parent-of-parent is not the loop, check if the segment itself was the loop
         const segmentLoopingOption = segmentElement.getAttribute('loopingOption');
          if (segmentLoopingOption === 'unique') {
              console.log(`    Confirmed looping ancestor IS the segment element: key=${segmentKey} name=${segmentName}`);
              return segmentElement;
          }
-        // If neither is the unique loop, log a warning.
         console.warn(`  Parent of segment (key=${loopKey}) is not the intended looping container (loopingOption=${loopingOption}), and segment (key=${segmentKey}) is not looping either. Cannot determine correct ancestor for TagList.`);
         return null;
     }
@@ -319,57 +296,47 @@ function generateTagListsForXmlProfile(xmlDoc) {
         return new XMLSerializer().serializeToString(xmlDoc);
     }
 
-    // Map to store tag information: { containerKey -> [ {ident_key, ident_name, qual_value}, ... ] }
     const tagsToGenerate = new Map();
-    const allElements = dataElementsNode.querySelectorAll('XMLElement'); // Get all XML elements
+    const allElements = dataElementsNode.querySelectorAll('XMLElement');
     console.log(`Found ${allElements.length} XMLElement(s) to scan for qualifiers.`);
 
     allElements.forEach(elementNode => {
-        // Find QualifierList direct child
         const qualifierList = elementNode.querySelector(':scope > QualifierList');
         if (qualifierList) {
-            // Find Qualifier children with a qualifierValue attribute
             const explicitQualifiers = qualifierList.querySelectorAll(':scope > Qualifier[qualifierValue]');
             if (explicitQualifiers.length > 0) {
-                 // Get all non-empty qualifier values
                  const qualValues = Array.from(explicitQualifiers)
                      .map(q => q.getAttribute('qualifierValue'))
-                     .filter(val => val); // Filter out empty/null values
+                     .filter(val => val);
 
                  if (qualValues.length > 0) {
                      const qualifyingElementKey = elementNode.getAttribute('key');
                      const qualifyingElementName = elementNode.getAttribute('name');
 
-                     // Need key and name of the element with qualifiers
                      if (!qualifyingElementKey || !qualifyingElementName) {
                          console.warn("Skipping element with qualifiers but missing key/name:", elementNode.outerHTML);
-                         return; // Skip this element
+                         return;
                      }
 
-                     // *** Use the corrected function to find the parent looping container element ***
                      const containerNode = findLoopingAncestorJs(elementNode);
 
                      if (containerNode) {
                          const containerKey = containerNode.getAttribute('key');
                          if (containerKey) {
                              console.log(`Found qualifiers [${qualValues.join(',')}] on element key=${qualifyingElementKey} (${qualifyingElementName}) belonging to container key=${containerKey} (${containerNode.getAttribute('name')})`);
-                             // Initialize map entry if first time for this container
                              if (!tagsToGenerate.has(containerKey)) {
                                  tagsToGenerate.set(containerKey, []);
                              }
                              const containerTags = tagsToGenerate.get(containerKey);
-                             // Get unique, sorted qualifier values
                              const uniqueSortedQuals = [...new Set(qualValues)].sort();
 
-                             // Add tag info for EACH unique qualifier value
                              uniqueSortedQuals.forEach(qVal => {
-                                 // Avoid adding duplicates if somehow processed twice
                                  const exists = containerTags.some(t => t.ident_key === qualifyingElementKey && t.qual_value === qVal);
                                  if (!exists) {
                                      containerTags.push({
-                                         ident_key: qualifyingElementKey, // Key of the element with the qualifier (e.g., N902)
-                                         ident_name: qualifyingElementName, // Name of the element (e.g., N902)
-                                         qual_value: qVal // The specific qualifier value (e.g., "BB" or "CC")
+                                         ident_key: qualifyingElementKey,
+                                         ident_name: qualifyingElementName,
+                                         qual_value: qVal
                                      });
                                  }
                              });
@@ -382,64 +349,56 @@ function generateTagListsForXmlProfile(xmlDoc) {
                  }
             }
         }
-    }); // End scanning elements
+    });
 
-    // Remove existing <tagLists> element before adding the new one
     let existingTagLists = xmlProfileNode.querySelector(':scope > tagLists');
     if (existingTagLists) {
         console.log("Removing existing <tagLists> element.");
         xmlProfileNode.removeChild(existingTagLists);
     }
 
-    // Create the new <tagLists> container
     const newTagLists = xmlDoc.createElement('tagLists');
 
     if (tagsToGenerate.size === 0) {
         console.log("No qualifying elements found to generate TagLists. Adding empty <tagLists>.");
     } else {
         console.log(`Generating ${Array.from(tagsToGenerate.values()).flat().length} TagList entries.`);
-        let listKeyCounter = 1; // Counter for unique listKey attributes
-        // Sort container keys numerically for consistent output order
+        let listKeyCounter = 1;
         const sortedContainerKeys = [...tagsToGenerate.keys()].sort((a, b) => parseInt(a) - parseInt(b));
 
-        sortedContainerKeys.forEach(containerKey => { // containerKey should now be correct (e.g., 722)
+        sortedContainerKeys.forEach(containerKey => {
              const tags = tagsToGenerate.get(containerKey);
-             // Sort tags within a container first by element key, then by qualifier value
              tags.sort((a, b) => {
                  const keyCompare = parseInt(a.ident_key) - parseInt(b.ident_key);
                  if (keyCompare !== 0) return keyCompare;
                  return a.qual_value.localeCompare(b.qual_value);
              });
 
-             // Create a TagList XML element for EACH tagInfo object
              tags.forEach(tagInfo => {
                  const tagList = xmlDoc.createElement('TagList');
-                 // *** Set the elementKey to the CORRECT containerKey found ***
                  tagList.setAttribute('elementKey', containerKey);
-                 tagList.setAttribute('listKey', listKeyCounter.toString()); // Assign unique list key
+                 tagList.setAttribute('listKey', listKeyCounter.toString());
                  listKeyCounter++;
 
                  const groupingExpr = xmlDoc.createElement('GroupingExpression');
-                 groupingExpr.setAttribute('operator', 'and'); // Default operator
+                 groupingExpr.setAttribute('operator', 'and');
 
                  const tagExpr = xmlDoc.createElement('TagExpression');
-                 tagExpr.setAttribute('identifierKey', tagInfo.ident_key); // Key of the element (e.g., N902's key = 727)
-                 tagExpr.setAttribute('identifierName', tagInfo.ident_name); // Name of the element (e.g., N902)
-                 tagExpr.setAttribute('identifierType', 'value'); // Type is 'value' for qualifier matching
+                 tagExpr.setAttribute('identifierKey', tagInfo.ident_key);
+                 tagExpr.setAttribute('identifierName', tagInfo.ident_name);
+                 tagExpr.setAttribute('identifierType', 'value');
 
                  const idValue = xmlDoc.createElement('identifierValue');
-                 idValue.textContent = tagInfo.qual_value; // The specific qualifier value ("BB" or "CC")
+                 idValue.textContent = tagInfo.qual_value;
 
-                 // Assemble the TagList structure
                  tagExpr.appendChild(idValue);
                  groupingExpr.appendChild(tagExpr);
                  tagList.appendChild(groupingExpr);
-                 newTagLists.appendChild(tagList); // Add the completed TagList to the container
+                 newTagLists.appendChild(tagList);
              });
         });
     }
 
-    // Insert the new <tagLists> element into the XML DOM structure.
     const namespacesNode = xmlProfileNode.querySelector(':scope > Namespaces');
     if (namespacesNode && namespacesNode.nextSibling) {
         xmlProfileNode.insertBefore(newTagLists, namespacesNode.nextSibling);
@@ -456,49 +415,89 @@ function generateTagListsForXmlProfile(xmlDoc) {
         }
     }
 
-    // Serialize the modified XML DOM back to a string
     const serializer = new XMLSerializer();
     const modifiedXmlString = serializer.serializeToString(xmlDoc);
     return modifiedXmlString;
 }
 
+// --- Renaming Logic ---
 
-function generateTagListsAndRenameElements(xmlDoc) {
-    // Renames XML elements based on their 'comments' attribute and then generates TagLists.
-    console.log("Renaming elements based on comments attribute...");
+/**
+ * Internal helper function to perform the renaming operation directly on the XML document object.
+ * Modifies the 'name' attribute of XMLElements based on their 'comments'.
+ * @param {XMLDocument} xmlDoc - The XML Document object to modify.
+ */
+function _performRenameOnDoc(xmlDoc) {
     const xmlProfileNode = xmlDoc.querySelector('XMLProfile');
-    if (!xmlProfileNode) throw new Error("Cannot find XMLProfile element.");
+    if (!xmlProfileNode) throw new Error("Cannot find XMLProfile element for renaming.");
 
     const dataElementsNode = xmlProfileNode.querySelector(':scope > DataElements');
     if (!dataElementsNode) {
          console.warn("No DataElements found in XML Profile. Skipping rename phase.");
-    } else {
-        const allXmlElements = dataElementsNode.querySelectorAll('XMLElement');
-        console.log(`Found ${allXmlElements.length} XMLElements to check for renaming.`);
-
-        allXmlElements.forEach(elementNode => {
-            const currentName = elementNode.getAttribute('name');
-            const comments = elementNode.getAttribute('comments'); // Get comment/description
-
-            // If name and non-empty comments exist...
-            if (currentName && comments && comments.trim() !== '') {
-                const snakeCaseComment = toSnakeCase(comments); // Convert comment to snake_case
-                if (snakeCaseComment) {
-                    // Create new name: originalName_snake_case_comment
-                    const newName = `${currentName}_${snakeCaseComment}`;
-                    console.log(`Renaming "${currentName}" to "${newName}" based on comment.`);
-                    elementNode.setAttribute('name', newName); // Update the name attribute
-                    // Also update identifierName if generating tags later
-                    // elementNode.setAttribute('identifierName', newName); // Let generateTagLists handle identifierName fresh
-                }
-            }
-        });
-        console.log("Element renaming based on comments complete.");
+         return; // Nothing to rename
     }
 
-    // After renaming, proceed to generate/regenerate the TagLists
-    console.log("Proceeding with TagList generation on potentially renamed profile...");
-    return generateTagListsForXmlProfile(xmlDoc); // Call the tag generation function
+    const allXmlElements = dataElementsNode.querySelectorAll('XMLElement');
+    console.log(`Found ${allXmlElements.length} XMLElements to check for renaming.`);
+    let renameCount = 0;
+
+    allXmlElements.forEach(elementNode => {
+        const currentName = elementNode.getAttribute('name');
+        const comments = elementNode.getAttribute('comments'); // Get comment/description
+
+        // If name and non-empty comments exist...
+        if (currentName && comments && comments.trim() !== '') {
+            const snakeCaseComment = toSnakeCase(comments); // Convert comment to snake_case
+            if (snakeCaseComment) {
+                // Create new name: originalName_snake_case_comment
+                const newName = `${currentName}_${snakeCaseComment}`;
+                // Only log if the name actually changes
+                if (newName !== currentName) {
+                    console.log(`Renaming "${currentName}" to "${newName}" based on comment.`);
+                    elementNode.setAttribute('name', newName); // Update the name attribute
+                    renameCount++;
+                }
+            }
+        }
+    });
+    console.log(`Element renaming based on comments complete. Renamed ${renameCount} elements.`);
+}
+
+/**
+ * Renames XML elements based on their 'comments' attribute.
+ * Takes an XML Document, renames elements in place, and returns the serialized XML string.
+ * Does NOT modify TagLists.
+ * @param {XMLDocument} xmlDoc - The XML Document object to modify.
+ * @returns {string} The modified XML profile as a string.
+ */
+function renameElementsOnly(xmlDoc) {
+    console.log("Starting renameElementsOnly function...");
+    _performRenameOnDoc(xmlDoc); // Perform the renaming directly on the document
+
+    // Serialize the modified XML DOM back to a string
+    const serializer = new XMLSerializer();
+    const modifiedXmlString = serializer.serializeToString(xmlDoc);
+    console.log("Finished renameElementsOnly function.");
+    return modifiedXmlString;
+}
+
+
+/**
+ * Renames XML elements based on comments AND generates/updates TagLists.
+ * @param {XMLDocument} xmlDoc - The XML Document object to modify.
+ * @returns {string} The modified XML profile (renamed and with updated TagLists) as a string.
+ */
+function generateTagListsAndRenameElements(xmlDoc) {
+    console.log("Starting generateTagListsAndRenameElements function...");
+    // 1. Perform renaming directly on the document object
+    _performRenameOnDoc(xmlDoc);
+
+    // 2. Generate TagLists based on the potentially renamed elements in the same document object
+    // Note: generateTagListsForXmlProfile already removes old tags and adds new ones.
+    const finalXmlString = generateTagListsForXmlProfile(xmlDoc);
+
+    console.log("Finished generateTagListsAndRenameElements function.");
+    return finalXmlString; // Return the result from tag generation
 }
 
 // --- Preview Functions ---
@@ -515,7 +514,7 @@ function parseBoomiEdiXmlForPreview(xmlDoc) {
          lines.push(`${indent}<${loopName} maxOccurs="${maxOccurs}" option="${loopingOption}">`);
 
          const children = Array.from(loopNode.children);
-         let previousSegmentName = ''; let segmentCount = 0; // Basic handling for duplicate segment names
+         let previousSegmentName = ''; let segmentCount = 0;
 
          children.forEach(child => {
              if (child.tagName === 'EdiSegment') {
@@ -525,12 +524,10 @@ function parseBoomiEdiXmlForPreview(xmlDoc) {
                   const maxUse = seg.getAttribute('maxUse') || '1';
                   const mandatory = seg.getAttribute('mandatory') === 'true';
                   const segMaxOccurs = maxUse === '-1' ? 'unbounded' : maxUse;
-                  // Simple duplicate handling for preview
                   if (segName === previousSegmentName) { segmentCount++; segName = `${segName}_${segmentCount}`; } else { segmentCount = 0; }
                   previousSegmentName = segName;
 
                   lines.push(`${indent}  <${segName} maxOccurs="${segMaxOccurs}" mandatory="${mandatory}">`);
-                  // Show elements within the segment
                   seg.querySelectorAll(':scope > EdiDataElement').forEach(el => {
                       const elName = el.getAttribute('name') || 'Element';
                       const elType = el.getAttribute('dataType') || 'string';
@@ -539,13 +536,12 @@ function parseBoomiEdiXmlForPreview(xmlDoc) {
                   });
                   lines.push(`${indent}  </${segName}>`);
              } else if (child.tagName === 'EdiLoop') {
-                 // Recurse for nested loops
                  walkLoop(child, depth + 1);
-                 previousSegmentName = ''; segmentCount = 0; // Reset for new loop scope
+                 previousSegmentName = ''; segmentCount = 0;
              }
          });
          lines.push(`${indent}</${loopName}>`);
-    } // End walkLoop
+    }
 
     const dataElementsNode = xmlDoc.querySelector('EdiProfile > DataElements');
     if (dataElementsNode) {
@@ -564,29 +560,24 @@ function parseBoomiXmlProfileForPreview(xmlDoc) {
          const elName = cleanName(elementNode.getAttribute('name') || 'Element');
          const maxOccursAttr = elementNode.getAttribute('maxOccurs') || '1';
          const minOccurs = elementNode.getAttribute('minOccurs') || '1';
-         // Map Boomi's -1 to unbounded
          const maxOccurs = maxOccursAttr === '-1' ? 'unbounded' : maxOccursAttr;
          const looping = elementNode.getAttribute('loopingOption') === 'unique' ? ' (Looping)' : '';
-         // Check for qualifiers to display in preview
          const qualifiers = elementNode.querySelectorAll(':scope > QualifierList > Qualifier');
          let qualifierText = '';
          if (qualifiers.length > 0) {
              const qualValues = Array.from(qualifiers)
                                    .map(q => q.getAttribute('qualifierValue'))
-                                   .filter(v => v); // Get non-empty values
+                                   .filter(v => v);
              if (qualValues.length > 0) {
                 qualifierText = ' Qualifiers: [' + qualValues.join(', ') + ']';
              }
          }
-         // Add line for the current element
          lines.push(`${indent}<${elName}${looping} minOccurs="${minOccurs}" maxOccurs="${maxOccurs}"${qualifierText}>`);
-         // Recurse for child elements
          elementNode.querySelectorAll(':scope > XMLElement').forEach(child => walkElement(child, depth + 1));
-    } // End walkElement
+    }
 
     const dataElementsNode = xmlDoc.querySelector('XMLProfile > DataElements');
     if (dataElementsNode) {
-        // Start walking from the root elements defined in DataElements
         dataElementsNode.querySelectorAll(':scope > XMLElement').forEach(rootEl => walkElement(rootEl));
     } else {
         lines.push("Preview Error: Could not find <DataElements> in XML Profile.");
