@@ -194,9 +194,12 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('No XSD found in the output area to modify.');
             return;
         }
+         // *** REMOVED CONFIRMATION POPUP ***
+         /*
          if (!confirm("This will remove minLength and maxLength restrictions from the currently displayed XSD. Continue?")) {
               return;
           }
+         */
         try {
             statusMessageElement.textContent = 'Removing Length Validation from XSD...';
             const modifiedXsdString = removeLengthRestrictionsFromXsd(currentXsd);

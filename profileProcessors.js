@@ -48,7 +48,34 @@ function mapType(ediType) {
 function parseTagLists(xmlDoc) {
     const tagMap = new Map();
     const tagListsNodes = xmlDoc.querySelectorAll('EdiProfile > tagLists > TagList');
-    tagListsNodes.forEach(tagList => { /* ... (implementation remains) ... */ });
+    tagListsNodes.forEach(tagList => {
+        const elementKey = tagList.getAttribute('elementKey');
+        const listKey = tagList.getAttribute('listKey');
+        if (!elementKey) return;
+
+        const expressions = tagList.querySelectorAll('GroupingExpression > TagExpression');
+        let docString = `TagList (listKey: ${listKey || 'N/A'}): Identifies instances where `;
+        const conditions = [];
+
+        expressions.forEach(expr => {
+            const idName = expr.getAttribute('identifierName');
+            const idType = expr.getAttribute('identifierType');
+            const idValueNode = expr.querySelector('identifierValue');
+            const idValue = idValueNode ? idValueNode.textContent : null;
+
+            if (idName && idType === 'value' && idValue !== null) {
+                conditions.push(`${idName} = "${idValue}"`);
+            }
+        });
+
+        if (conditions.length > 0) {
+            docString += conditions.join(' AND ');
+            if (!tagMap.has(elementKey)) {
+                tagMap.set(elementKey, []);
+            }
+            tagMap.get(elementKey).push(docString);
+        }
+     });
     return tagMap;
 }
 
@@ -231,29 +258,53 @@ function removeLengthRestrictionsFromXsd(xsdString) {
         throw new Error("Could not parse the XSD content in the output area.");
     }
 
-    // Find all minLength and maxLength elements within the XSD namespace
-    const minLengthNodes = xmlDoc.querySelectorAll('minLength[namespaceURI="http://www.w3.org/2001/XMLSchema"]');
-    const maxLengthNodes = xmlDoc.querySelectorAll('maxLength[namespaceURI="http://www.w3.org/2001/XMLSchema"]');
+    // Find all minLength and maxLength elements, handling potential namespace prefixes
+    // This covers <xs:minLength>, <minLength>, <xs:maxLength>, <maxLength>
+    const minLengthNodes = xmlDoc.querySelectorAll("xs\\:minLength, minLength");
+    const maxLengthNodes = xmlDoc.querySelectorAll("xs\\:maxLength, maxLength");
 
     let removedCount = 0;
 
+    console.log(`Found ${minLengthNodes.length} minLength nodes.`);
     minLengthNodes.forEach(node => {
-        console.log(`Removing node: ${node.outerHTML}`);
-        node.remove(); // Remove the node from the DOM
-        removedCount++;
+        // Double-check namespace just in case, although selector should handle it
+        if (node.namespaceURI === "http://www.w3.org/2001/XMLSchema") {
+            console.log(`  Removing node: ${node.tagName} with value ${node.getAttribute('value')}`);
+            node.remove(); // Remove the node from the DOM
+            removedCount++;
+        } else {
+             console.log(`  Skipping node (wrong namespace): ${node.tagName}`);
+        }
     });
 
+    console.log(`Found ${maxLengthNodes.length} maxLength nodes.`);
     maxLengthNodes.forEach(node => {
-        console.log(`Removing node: ${node.outerHTML}`);
-        node.remove(); // Remove the node from the DOM
-        removedCount++;
+         if (node.namespaceURI === "http://www.w3.org/2001/XMLSchema") {
+            console.log(`  Removing node: ${node.tagName} with value ${node.getAttribute('value')}`);
+            node.remove(); // Remove the node from the DOM
+            removedCount++;
+         } else {
+              console.log(`  Skipping node (wrong namespace): ${node.tagName}`);
+         }
     });
 
     console.log(`Removed ${removedCount} length restriction elements.`);
 
-    // Optional: Clean up potentially empty restriction elements if they ONLY contained length facets
-    // This adds complexity and risk with simple removal, so skipping for now.
-    // A more robust solution would involve checking if the <xs:restriction> still has children.
+    // Optional: Clean up potentially empty restriction elements
+    const restrictionNodes = xmlDoc.querySelectorAll("xs\\:restriction, restriction");
+    restrictionNodes.forEach(restrictionNode => {
+        // Check if the restriction element ONLY contained length facets and now has no facet children left
+        // Facet children could be: enumeration, pattern, whiteSpace, length, minLength, maxLength, etc.
+        const remainingFacets = restrictionNode.querySelectorAll("xs\\:enumeration, enumeration, xs\\:pattern, pattern, xs\\:whiteSpace, whiteSpace, xs\\:length, length, xs\\:minInclusive, minInclusive, xs\\:maxInclusive, maxInclusive, xs\\:minExclusive, minExclusive, xs\\:maxExclusive, maxExclusive, xs\\:totalDigits, totalDigits, xs\\:fractionDigits, fractionDigits");
+
+        if (remainingFacets.length === 0 && restrictionNode.parentElement && restrictionNode.parentElement.tagName.toLowerCase().endsWith('simpletype')) {
+             // If the restriction is now empty and inside a simpleType, we might be able to remove the simpleType/restriction structure
+             // However, this is complex because the simpleType might be necessary for the base type.
+             // Simplest safe approach: Leave the empty restriction. Boomi should handle it.
+             console.log(`  Restriction element (${restrictionNode.getAttribute('base')}) is now empty but kept for safety.`);
+        }
+    });
+
 
     // Serialize the modified DOM back to a string
     const serializer = new XMLSerializer();
