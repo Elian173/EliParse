@@ -3,20 +3,19 @@
 // --- Global Variables (Specific to this app) ---
 window.boomiXmlDoc = null; // Holds the parsed XML document of the *input* profile
 window.profileType = null; // 'EDI' or 'XML' or null
-window.currentOutputType = null; // 'XSD' or 'ProfileXML' or null - Tracks what's in the output area
+window.currentOutputType = null; // 'XSD' or 'ProfileXML' or null
 
 // --- Initialization Function (Called by main.js) ---
 function initBoomiUtilsApp() {
     console.log("Initializing Boomi Profile Utilities App...");
 
     // --- DOM Element References (Scoped to this app) ---
-    // It's generally better to query within the app's container if possible,
-    // but using IDs is okay since they should be unique page-wide.
     const fileInputElement = document.getElementById('fileInput');
     const xmlInputAreaElement = document.getElementById('xmlInputArea');
     const previewAreaElement = document.getElementById('previewArea');
     const statusMessageElement = document.getElementById('statusMessage');
     const generateXsdButton = document.getElementById('generateXsd');
+    // Removed generateJsonSchemaButton reference
     const removeLengthValidationButton = document.getElementById('removeLengthValidation');
     const renameOnlyButton = document.getElementById('renameOnly');
     const generateTagsButton = document.getElementById('generateTags');
@@ -29,14 +28,10 @@ function initBoomiUtilsApp() {
     const fileNameDisplay = document.getElementById('fileName');
 
     // --- Event Listeners (Specific to this app) ---
-    // Clear previous listeners if any (optional, good practice for complex SPAs)
-    // For this simple case, we might skip this, but showing the pattern:
-    // Example: fileInputElement.replaceWith(fileInputElement.cloneNode(true));
-    //          fileInputElement = document.getElementById('fileInput'); // Re-select after clone
-
     if (fileInputElement) fileInputElement.addEventListener('change', handleFileInputChange);
     if (xmlInputAreaElement) xmlInputAreaElement.addEventListener('input', handleTextInputChange);
     if (generateXsdButton) generateXsdButton.addEventListener('click', handleGenerateXsd);
+    // Removed generateJsonSchemaButton listener
     if (removeLengthValidationButton) removeLengthValidationButton.addEventListener('click', handleRemoveLengthValidation);
     if (renameOnlyButton) renameOnlyButton.addEventListener('click', handleRenameOnly);
     if (generateTagsButton) generateTagsButton.addEventListener('click', handleGenerateTags);
@@ -49,12 +44,8 @@ function initBoomiUtilsApp() {
         fileInputElement.addEventListener('change', function() {
             fileNameDisplay.textContent = (this.files && this.files.length > 0) ? this.files[0].name : 'No file chosen';
         });
-        // Initialize file name display in case a file is already selected (e.g., browser cache)
         fileNameDisplay.textContent = (fileInputElement.files && fileInputElement.files.length > 0) ? fileInputElement.files[0].name : 'No file chosen';
     }
-
-    // Reset state when initializing (optional, depends on desired behavior)
-    // resetState(); // You might want to clear things when the app loads
 
     console.log("Boomi Profile Utilities App Initialized.");
 
@@ -136,7 +127,6 @@ function initBoomiUtilsApp() {
         if (ediProfileElement) {
             setProfileState('EDI', xmlDoc, profileName);
             try {
-                // Check if profileProcessors.js functions are available
                 if (typeof parseBoomiEdiXmlForPreview === 'function') {
                    if (previewAreaElement) previewAreaElement.textContent = parseBoomiEdiXmlForPreview(xmlDoc);
                 } else {
@@ -175,6 +165,7 @@ function initBoomiUtilsApp() {
         window.boomiXmlDoc = xmlDoc.cloneNode(true);
 
         if (generateXsdButton) generateXsdButton.disabled = (type !== 'EDI');
+        // Removed JSON Schema button logic
         if (renameOnlyButton) renameOnlyButton.disabled = (type !== 'XML');
         if (generateTagsButton) generateTagsButton.disabled = (type !== 'XML');
         if (generateTagsAndRenameButton) generateTagsAndRenameButton.disabled = (type !== 'XML');
@@ -192,17 +183,12 @@ function initBoomiUtilsApp() {
         window.boomiXmlDoc = null;
         window.currentOutputType = null;
         if (generateXsdButton) generateXsdButton.disabled = true;
+        // Removed JSON Schema button logic
         if (removeLengthValidationButton) removeLengthValidationButton.disabled = true;
         if (renameOnlyButton) renameOnlyButton.disabled = true;
         if (generateTagsButton) generateTagsButton.disabled = true;
         if (generateTagsAndRenameButton) generateTagsAndRenameButton.disabled = true;
         if (generatedOutputContainer) generatedOutputContainer.style.display = 'none';
-        // Optionally clear inputs/previews
-        // if (xmlInputAreaElement) xmlInputAreaElement.value = '';
-        // if (previewAreaElement) previewAreaElement.textContent = 'Load or paste...';
-        // if (statusMessageElement) statusMessageElement.textContent = '';
-        // if (fileInputElement) fileInputElement.value = '';
-        // if (fileNameDisplay) fileNameDisplay.textContent = 'No file chosen';
     }
 
     function handlePreviewError(error, type) {
@@ -222,10 +208,7 @@ function initBoomiUtilsApp() {
         }
         try {
             if (statusMessageElement) statusMessageElement.textContent = 'Generating XSD (Validation Included)...';
-            // Check if processor function exists
-            if (typeof generateXsd !== 'function') {
-                 throw new Error("generateXsd function is not available.");
-            }
+            if (typeof generateXsd !== 'function') { throw new Error("generateXsd function is not available."); }
             const xsdString = generateXsd(window.boomiXmlDoc.cloneNode(true));
             displayGeneratedOutput(xsdString, 'Generated XSD', 'XSD', 'xsdFromEdiToImport.xsd');
             if (statusMessageElement) statusMessageElement.textContent = 'XSD Generation Complete.';
@@ -234,7 +217,11 @@ function initBoomiUtilsApp() {
         }
     }
 
+    // Removed handleGenerateJsonSchema
+
+    // Updated Handler for Remove Length Validation button
     function handleRemoveLengthValidation() {
+        // Check if there is content and if it's XSD
         if (!generatedContentElement || !window.currentOutputType || window.currentOutputType !== 'XSD') {
             alert('No XSD found in the output area to modify.');
             return;
@@ -245,12 +232,13 @@ function initBoomiUtilsApp() {
             return;
         }
         try {
-            if (statusMessageElement) statusMessageElement.textContent = 'Removing Length Validation from XSD...';
-             // Check if processor function exists
-            if (typeof removeLengthRestrictionsFromXsd !== 'function') {
-                 throw new Error("removeLengthRestrictionsFromXsd function is not available.");
-            }
+            if (statusMessageElement) statusMessageElement.textContent = `Removing Length Validation from XSD...`;
+            // Check if the processor function exists (now named removeLengthRestrictionsFromXsd)
+            if (typeof removeLengthRestrictionsFromXsd !== 'function') { throw new Error("removeLengthRestrictionsFromXsd function is not available."); }
+
+            // Call the XSD-specific function
             const modifiedXsdString = removeLengthRestrictionsFromXsd(currentXsd);
+
             if (modifiedXsdString) {
                 displayGeneratedOutput(modifiedXsdString, 'Generated XSD (Length Validation Removed)', 'XSD', 'xsd_no_length_validation.xsd');
                 if (statusMessageElement) statusMessageElement.textContent = 'Length Validation Removal Complete.';
@@ -262,6 +250,7 @@ function initBoomiUtilsApp() {
         }
     }
 
+
     function handleRenameOnly() {
         if (!window.boomiXmlDoc || window.profileType !== 'XML') {
             alert('Please load an XML Profile first.');
@@ -269,10 +258,7 @@ function initBoomiUtilsApp() {
         }
         try {
             if (statusMessageElement) statusMessageElement.textContent = 'Renaming Elements...';
-             // Check if processor function exists
-            if (typeof renameElementsOnly !== 'function') {
-                 throw new Error("renameElementsOnly function is not available.");
-            }
+            if (typeof renameElementsOnly !== 'function') { throw new Error("renameElementsOnly function is not available."); }
             const modifiedXmlString = renameElementsOnly(window.boomiXmlDoc.cloneNode(true));
             if (modifiedXmlString) {
                 displayGeneratedOutput(modifiedXmlString, 'Renamed Profile XML (Descriptive Names)', 'ProfileXML', 'profile_renamed.xml');
@@ -292,10 +278,7 @@ function initBoomiUtilsApp() {
         }
         try {
             if (statusMessageElement) statusMessageElement.textContent = 'Generating/Updating TagLists...';
-             // Check if processor function exists
-            if (typeof generateTagListsForXmlProfile !== 'function') {
-                 throw new Error("generateTagListsForXmlProfile function is not available.");
-            }
+            if (typeof generateTagListsForXmlProfile !== 'function') { throw new Error("generateTagListsForXmlProfile function is not available."); }
             const modifiedXmlString = generateTagListsForXmlProfile(window.boomiXmlDoc.cloneNode(true));
             if (modifiedXmlString) {
                 displayGeneratedOutput(modifiedXmlString, 'Profile XML with TagLists', 'ProfileXML', 'profile_with_tags.xml');
@@ -315,10 +298,7 @@ function initBoomiUtilsApp() {
         }
         try {
             if (statusMessageElement) statusMessageElement.textContent = 'Renaming Elements & Generating Tags...';
-             // Check if processor function exists
-            if (typeof generateTagListsAndRenameElements !== 'function') {
-                 throw new Error("generateTagListsAndRenameElements function is not available.");
-            }
+            if (typeof generateTagListsAndRenameElements !== 'function') { throw new Error("generateTagListsAndRenameElements function is not available."); }
             const modifiedXmlString = generateTagListsAndRenameElements(window.boomiXmlDoc.cloneNode(true));
             if (modifiedXmlString) {
                 displayGeneratedOutput(modifiedXmlString, 'Renamed Profile XML with TagLists', 'ProfileXML', 'profile_renamed_with_tags.xml');
@@ -350,16 +330,21 @@ function initBoomiUtilsApp() {
             generatedOutputContainer.querySelector('h2').textContent = title + ':';
             generatedOutputContainer.style.display = 'block';
         }
-        window.currentOutputType = outputType;
+        window.currentOutputType = outputType; // Track the type of content displayed
         if (copyStatusElement) copyStatusElement.textContent = '';
         if (copyButton) {
             copyButton.textContent = 'Copy to Clipboard';
             copyButton.disabled = false;
         }
 
-        if (removeLengthValidationButton) removeLengthValidationButton.disabled = (outputType !== 'XSD');
+        // Enable the "Remove Length Validation" button ONLY if XSD is displayed
+        if (removeLengthValidationButton) {
+             removeLengthValidationButton.disabled = (outputType !== 'XSD');
+        }
+
 
         if (downloadButton) {
+            // Allow download for XSD and ProfileXML
             if (outputType === 'XSD' || outputType === 'ProfileXML') {
                 downloadButton.style.display = 'inline-block';
                 downloadButton.dataset.filename = suggestedFilename;
@@ -407,7 +392,15 @@ function initBoomiUtilsApp() {
     }
 
     function saveFile(filename, content) {
-        const blob = new Blob([content], { type: 'application/xml;charset=utf-8' });
+        // Determine MIME type based on filename extension
+        let mimeType = 'application/octet-stream'; // Default
+        if (filename.endsWith('.xml') || filename.endsWith('.xsd')) {
+            mimeType = 'application/xml;charset=utf-8';
+        } else if (filename.endsWith('.json')) { // Keep JSON for potential future use
+            mimeType = 'application/json;charset=utf-8';
+        }
+
+        const blob = new Blob([content], { type: mimeType });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
         link.download = filename;

@@ -33,7 +33,7 @@
                         Content-Type - application/xml
                         ____
                         Workflow Steps:
-                        1. Load original EDI Component -> Click 'Generate XSD'. (Validation rules are now always included).
+                        1. Load original EDI Component -> Click 'Generate XSD'. (Validation rules are included).
                         2. (Optional) Click 'Remove Length Validation from XSD' if needed.
                         3. Import generated/modified XSD into Boomi -> Create new XML Profile.
                         4. Load the *new* Boomi-generated XML Profile Component XML here.
@@ -78,8 +78,7 @@
 
                 <div id="generatedOutputContainer" class="card output-card" style="display: none;">
                      <h2>Generated Output</h2>
-                     <pre id="generatedContent"></pre>
-                     <div class="output-controls button-group">
+                     <pre id="generatedContent"></pre> <div class="output-controls button-group">
                          <button id="copyButton" class="btn btn-secondary">Copy to Clipboard</button>
                          <button id="downloadButton" class="btn btn-secondary" style="display: none;">Download File</button>
                          <span id="copyStatus" class="copy-status"></span>
@@ -89,7 +88,9 @@
                 <h1>Placeholder App 2</h1>
                 <p>This is where the content for the second app would go.</p>
                 <button id="placeholder-button" class="btn btn-primary">Log Hello</button>
-            </div> </main> </div> <script src="profileProcessors.js"></script> <script src="boomiUtils.js"></script>      <script src="main.js"></script>
+            </div> </main> </div> <script src="profileProcessors.js"></script>
+    <script src="boomiUtils.js"></script>
+    <script src="main.js"></script>
 
-    </body>
+</body>
 </html>
